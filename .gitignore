@@ -1,0 +1,7 @@
+node_modules/
+.pnpm/
+*.log
+.DS_Store
+.env
+.debug-url.txt
+client/.client.tmp.cjs

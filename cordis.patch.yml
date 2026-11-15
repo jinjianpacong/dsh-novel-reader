@@ -1,0 +1,4 @@
+# Inserts the Novel Reader plugin into the active profile.
+- insert:
+    - id: novel-reader
+      name: '@local/dsh-novel-reader'
