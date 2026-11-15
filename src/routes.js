@@ -3,9 +3,10 @@ import { dirname, extname, join, normalize } from 'node:path'
 import JSZip from 'jszip'
 import { computeStats, startSession, heartbeat, endSession, bumpLookup } from './history.js'
 import { importBook } from './library.js'
+import { lookupDictionary } from './dictionary.js'
 import { finishQuiz, generateQuiz } from './quiz.js'
 import { addVocab, deleteVocab, dueCount, filterVocab, reviewVocab, updateVocab } from './vocab.js'
-import { lookupWord, recordLookup, translateText } from './translate.js'
+import { recordLookup, translateText } from './translate.js'
 import { cleanText, clamp, fail, nowIso, ok, readBuffer, readJson } from './util.js'
 
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }
@@ -227,6 +228,26 @@ export function createRouter({ ctx, store, sync }) {
         return ok(res, { book })
       }
 
+      if (method === 'GET' && path === 'dictionary') {
+        const word = cleanText(url.searchParams.get('word') ?? '', 64)
+        const result = await lookupDictionary(word)
+        if (result.found) {
+          const bookId = url.searchParams.get('bookId') || null
+          const chapterIndexValue = Number(url.searchParams.get('chapterIndex'))
+          const recorded = await recordLookup(store, {
+            kind: 'word',
+            text: result.word,
+            translation: result.definitions?.[0]?.meaning ?? '',
+            provider: 'uapis-dictionary',
+            bookId,
+            chapterIndex: Number.isInteger(chapterIndexValue) ? chapterIndexValue : null,
+            chapterTitle: url.searchParams.get('chapterTitle') ?? '',
+          })
+          if (recorded && bookId) await bumpLookup(store, { bookId })
+        }
+        return ok(res, result)
+      }
+
       if (method === 'POST' && path === 'translate') {
         const body = await readJson(req)
         const text = cleanText(body.text, 4000)
@@ -235,22 +256,8 @@ export function createRouter({ ctx, store, sync }) {
         const targetLanguage = cleanText(body.targetLanguage ?? state.settings.targetLanguage ?? 'zh-CN', 20)
         const engine = cleanText(body.engine ?? state.settings.translationEngine ?? 'auto', 20)
         const kind = body.kind === 'sentence' || /\s/.test(text.trim()) ? 'sentence' : 'word'
-        let result
-        if (kind === 'word') {
-          const lookup = await lookupWord(ctx, text, targetLanguage, engine)
-          result = {
-            kind,
-            text: lookup.word,
-            translation: lookup.translation,
-            provider: lookup.provider,
-            phonetic: lookup.phonetic,
-            definitions: lookup.definitions,
-            audio: lookup.audio,
-          }
-        } else {
-          const translated = await translateText(ctx, { text, targetLanguage, engine })
-          result = { kind, text, translation: translated.translation, provider: translated.provider, phonetic: '', definitions: [], audio: '' }
-        }
+        const translated = await translateText(ctx, { text, targetLanguage, engine })
+        const result = { kind, text, translation: translated.translation, provider: translated.provider, phonetic: '', definitions: [], audio: '' }
         if (state.settings.autoSaveLookups !== false) {
           const recorded = await recordLookup(store, { ...result, bookId: body.bookId, chapterIndex: body.chapterIndex, chapterTitle: body.chapterTitle })
           if (recorded && body.bookId) await bumpLookup(store, { bookId: body.bookId })

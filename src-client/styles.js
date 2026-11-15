@@ -203,6 +203,18 @@ export const CSS = `
 .nr-pop-head { display: flex; align-items: flex-start; gap: 8px; }
 .nr-pop-word { font-size: 19px; line-height: 25px; font-weight: 680; }
 .nr-pop-phonetic { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary, #8b93a1); margin-top: 1px; }
+.nr-pop-subtitle { font-size: 10.5px; line-height: 16px; color: var(--dsw-alias-label-tertiary, #8b93a1); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+.nr-dict-phonetics { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 4px; font-size: 12px; color: var(--dsw-alias-label-secondary, #5c6570); }
+.nr-dict-phonetics b { font-size: 10px; color: var(--dsw-alias-label-tertiary, #8b93a1); margin-right: 4px; }
+.nr-audio-btn { display: inline-grid; place-items: center; width: 21px; height: 21px; margin-left: 2px; padding: 0; border: 0; border-radius: 5px; background: var(--dsw-alias-bg-layer-2, #f3f4f6); color: var(--dsw-alias-label-secondary, #5c6570); cursor: pointer; vertical-align: middle; }
+.nr-dict-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0; }
+.nr-dict-section { border-top: 1px solid var(--dsw-alias-border-l1, #eef0f3); padding-top: 10px; margin-top: 10px; }
+.nr-dict-title { font-size: 10.5px; line-height: 16px; color: var(--dsw-alias-label-tertiary, #8b93a1); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 6px; }
+.nr-dict-def { font-size: 12.5px; line-height: 20px; color: var(--dsw-alias-label-primary, #1f2328); margin-bottom: 5px; }
+.nr-dict-def b, .nr-dict-en b { font-weight: 600; color: var(--dsw-alias-label-secondary, #5c6570); margin-right: 4px; }
+.nr-dict-en { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary, #5c6570); margin-bottom: 7px; }
+.nr-dict-en small, .nr-dict-example small { display: block; color: var(--dsw-alias-label-tertiary, #8b93a1); font-size: 11px; line-height: 17px; margin-top: 2px; }
+.nr-dict-example { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary, #1f2328); margin-bottom: 7px; }
 .nr-pop-close { margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--dsw-alias-label-tertiary, #8b93a1); cursor: pointer; }
 .nr-pop-trans { font-size: 14px; line-height: 22px; margin: 10px 0 0; color: var(--dsw-alias-label-primary, #1f2328); }
 .nr-pop-defs { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }

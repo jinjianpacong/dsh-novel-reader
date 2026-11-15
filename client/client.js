@@ -393,7 +393,7 @@ function wordAtPoint(x, y) {
     rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }
   };
 }
-function SelectionMenu({ menu, selection, saving, onClose, onTranslate, onSave, onCopy }) {
+function SelectionMenu({ menu, selection, saving, onClose, onDictionary, onTranslate, onSave, onCopy }) {
   const ref = (0, import_react3.useRef)(null);
   (0, import_react3.useEffect)(() => {
     const closeOnOutside = (event) => {
@@ -412,7 +412,88 @@ function SelectionMenu({ menu, selection, saving, onClose, onTranslate, onSave, 
   const isSentence = selection.kind === "sentence";
   const left = Math.min(menu.x, window.innerWidth - 220);
   const top = Math.min(menu.y, window.innerHeight - 190);
-  return /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-context-menu", ref, style: { left, top }, onMouseDown: (event) => event.stopPropagation() }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-menu-label" }, selection.text.length > 42 ? `${selection.text.slice(0, 42)}\u2026` : selection.text), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onTranslate }, isSentence ? "\u7FFB\u8BD1\u8FD9\u53E5\u8BDD" : "\u67E5\u8FD9\u4E2A\u8BCD"), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onSave, disabled: saving }, saving ? "\u4FDD\u5B58\u4E2D\u2026" : isSentence ? "\u6536\u85CF\u8FD9\u4E2A\u53E5\u5B50" : "\u52A0\u5165\u751F\u8BCD\u672C"), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onCopy }, "\u590D\u5236"));
+  return /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-context-menu", ref, style: { left, top }, onMouseDown: (event) => event.stopPropagation() }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-menu-label" }, selection.text.length > 42 ? `${selection.text.slice(0, 42)}\u2026` : selection.text), isSentence ? /* @__PURE__ */ import_react3.default.createElement(import_react3.default.Fragment, null, /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onTranslate }, "\u7FFB\u8BD1\u6574\u53E5"), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onSave, disabled: saving }, saving ? "\u4FDD\u5B58\u4E2D\u2026" : "\u6536\u85CF\u8FD9\u4E2A\u53E5\u5B50")) : /* @__PURE__ */ import_react3.default.createElement(import_react3.default.Fragment, null, /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onDictionary }, "\u67E5\u8BCD\u5178"), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onTranslate }, "\u7FFB\u8BD1\u8FD9\u4E2A\u8BCD"), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onSave, disabled: saving }, saving ? "\u4FDD\u5B58\u4E2D\u2026" : "\u52A0\u5165\u751F\u8BCD\u672C")), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", onClick: onCopy }, "\u590D\u5236"));
+}
+function DictionaryPopover({ selection, book, chapterIndex, chapterTitle, onClose, notify }) {
+  const [loading, setLoading] = (0, import_react3.useState)(true);
+  const [entry, setEntry] = (0, import_react3.useState)(null);
+  const [error, setError] = (0, import_react3.useState)("");
+  const [saved, setSaved] = (0, import_react3.useState)(false);
+  const [saving, setSaving] = (0, import_react3.useState)(false);
+  (0, import_react3.useEffect)(() => {
+    let alive = true;
+    setLoading(true);
+    setError("");
+    setEntry(null);
+    setSaved(false);
+    const query = new URLSearchParams({
+      word: selection.text,
+      bookId: book.id,
+      chapterIndex: String(chapterIndex),
+      chapterTitle
+    });
+    api(`/dictionary?${query.toString()}`).then((data) => {
+      if (alive) {
+        setEntry(data);
+        setLoading(false);
+      }
+    }).catch((err) => {
+      if (alive) {
+        setError(err.message);
+        setLoading(false);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [selection.text, book.id, chapterIndex, chapterTitle]);
+  const play = (audio) => {
+    if (!audio) return;
+    try {
+      new Audio(audio).play().catch(() => notify("\u53D1\u97F3\u64AD\u653E\u5931\u8D25", true));
+    } catch {
+      notify("\u53D1\u97F3\u64AD\u653E\u5931\u8D25", true);
+    }
+  };
+  const save = async () => {
+    if (!entry?.found) return;
+    setSaving(true);
+    try {
+      const definitions = entry.definitions.map((row) => ({
+        pos: row.pos,
+        text: row.meaning,
+        example: entry.englishDefinitions?.[0]?.examples?.[0] ?? ""
+      }));
+      await api("/vocab", {
+        method: "POST",
+        body: {
+          term: entry.word,
+          kind: "word",
+          translations: entry.definitions.map((row) => row.meaning).slice(0, 3),
+          definitions,
+          phonetic: entry.phonetics?.uk?.text || entry.phonetics?.us?.text || "",
+          context: {
+            bookId: book.id,
+            chapterIndex,
+            chapterTitle,
+            sentence: selection.sentence || selection.text
+          }
+        }
+      });
+      setSaved(true);
+      notify("\u5DF2\u52A0\u5165\u751F\u8BCD\u672C");
+    } catch (err) {
+      notify(err.message, true);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const width = 390;
+  const left = Math.min(Math.max(12, selection.rect.left), window.innerWidth - width - 12);
+  const top = Math.min(Math.max(12, selection.rect.bottom + 8), Math.max(12, window.innerHeight - 520));
+  const uk = entry?.phonetics?.uk;
+  const us = entry?.phonetics?.us;
+  return /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-popover nr-dictionary", style: { left, top, width }, onMouseDown: (event) => event.stopPropagation() }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-head" }, /* @__PURE__ */ import_react3.default.createElement("div", null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-word" }, entry?.word ?? selection.text), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-subtitle" }, "\u8BCD\u5178\u91CA\u4E49")), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", className: "nr-pop-close", onClick: onClose, "aria-label": "\u5173\u95ED" }, /* @__PURE__ */ import_react3.default.createElement(Icon, { name: "close", size: 12 }))), loading ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-loading", style: { padding: "18px 0" } }, "\u67E5\u8BCD\u5178\u4E2D\u2026") : null, error ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-explain", style: { color: "var(--dsw-alias-state-error-primary)" } }, error) : null, !loading && entry && !entry.found ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-explain" }, "\u8BCD\u5178\u6682\u672A\u6536\u5F55 \u201C", selection.text, "\u201D\uFF0C\u53EF\u4EE5\u8BD5\u8BD5\u7FFB\u8BD1\u8FD9\u4E2A\u8BCD\u3002") : null, entry?.found ? /* @__PURE__ */ import_react3.default.createElement(import_react3.default.Fragment, null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-phonetics" }, uk?.text ? /* @__PURE__ */ import_react3.default.createElement("span", null, /* @__PURE__ */ import_react3.default.createElement("b", null, "UK"), " ", uk.text, " ", uk.audio ? /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", className: "nr-audio-btn", onClick: () => play(uk.audio), "aria-label": "\u64AD\u653E\u82F1\u5F0F\u53D1\u97F3" }, /* @__PURE__ */ import_react3.default.createElement(Icon, { name: "volume", size: 13 })) : null) : null, us?.text ? /* @__PURE__ */ import_react3.default.createElement("span", null, /* @__PURE__ */ import_react3.default.createElement("b", null, "US"), " ", us.text, " ", us.audio ? /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", className: "nr-audio-btn", onClick: () => play(us.audio), "aria-label": "\u64AD\u653E\u7F8E\u5F0F\u53D1\u97F3" }, /* @__PURE__ */ import_react3.default.createElement(Icon, { name: "volume", size: 13 })) : null) : null), entry.examTags?.length ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-tags" }, entry.examTags.map((tag) => /* @__PURE__ */ import_react3.default.createElement("span", { key: tag, className: "nr-chip" }, tag))) : null, entry.definitions?.length ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-section" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-title" }, "\u4E2D\u6587\u91CA\u4E49"), entry.definitions.map((row, index) => /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-def", key: index }, row.pos ? /* @__PURE__ */ import_react3.default.createElement("b", null, row.pos) : null, row.meaning))) : null, entry.englishDefinitions?.length ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-section" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-title" }, "\u82F1\u6587\u91CA\u4E49"), entry.englishDefinitions.slice(0, 4).map((row, index) => /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-en", key: index }, /* @__PURE__ */ import_react3.default.createElement("div", null, row.pos ? /* @__PURE__ */ import_react3.default.createElement("b", null, row.pos) : null, row.definition), row.examples?.length ? /* @__PURE__ */ import_react3.default.createElement("small", null, row.examples.slice(0, 2).join(" / ")) : null))) : null, entry.examples?.length ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-section" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-title" }, "\u4F8B\u53E5"), entry.examples.slice(0, 3).map((row, index) => /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-dict-example", key: index }, /* @__PURE__ */ import_react3.default.createElement("div", null, row.source), /* @__PURE__ */ import_react3.default.createElement("small", null, row.translation)))) : null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-actions" }, /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "primary", size: "small", onClick: save, disabled: saved || saving }, saved ? "\u5DF2\u5728\u751F\u8BCD\u672C" : saving ? "\u4FDD\u5B58\u4E2D\u2026" : "\u52A0\u5165\u751F\u8BCD\u672C"), /* @__PURE__ */ import_react3.default.createElement(Button, { size: "small", onClick: () => navigator.clipboard?.writeText(entry.word).then(() => notify("\u5DF2\u590D\u5236")) }, "\u590D\u5236\u5355\u8BCD"))) : null);
 }
 function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, notify }) {
   const [loading, setLoading] = (0, import_react3.useState)(true);
@@ -482,7 +563,7 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
   const left = Math.min(Math.max(12, selection.rect.left), window.innerWidth - width - 12);
   const estimated = 260;
   const top = selection.rect.bottom + estimated < window.innerHeight ? selection.rect.bottom + 8 : Math.max(12, selection.rect.top - estimated - 8);
-  return /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-popover", style: { left, top }, onMouseDown: (event) => event.stopPropagation() }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-head" }, /* @__PURE__ */ import_react3.default.createElement("div", null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-word" }, result?.text ?? selection.text), result?.phonetic ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-phonetic" }, result.phonetic) : null), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", className: "nr-pop-close", onClick: onClose, "aria-label": "\u5173\u95ED" }, /* @__PURE__ */ import_react3.default.createElement(Icon, { name: "close", size: 12 }))), loading ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-loading", style: { padding: "18px 0" } }, "\u7FFB\u8BD1\u4E2D\u2026") : null, error ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-explain", style: { color: "var(--dsw-alias-state-error-primary)" } }, error) : null, result && !loading ? /* @__PURE__ */ import_react3.default.createElement(import_react3.default.Fragment, null, /* @__PURE__ */ import_react3.default.createElement("p", { className: "nr-pop-trans" }, result.translation || "\uFF08\u6CA1\u6709\u8BD1\u6587\uFF09"), result.definitions?.length ? /* @__PURE__ */ import_react3.default.createElement("ul", { className: "nr-pop-defs" }, result.definitions.slice(0, 3).map((row, index) => /* @__PURE__ */ import_react3.default.createElement("li", { key: index }, /* @__PURE__ */ import_react3.default.createElement("b", null, row.pos || "def."), " ", row.text))) : null, selection.kind === "sentence" && selection.sentence ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-sentence" }, selection.sentence) : null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-actions" }, /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "primary", size: "small", onClick: save, disabled: saved || saving }, saved ? "\u5DF2\u5728\u751F\u8BCD\u672C" : saving ? "\u4FDD\u5B58\u4E2D\u2026" : "\u52A0\u5165\u751F\u8BCD\u672C"), /* @__PURE__ */ import_react3.default.createElement(Button, { size: "small", onClick: () => navigator.clipboard?.writeText(selection.text).then(() => notify("\u5DF2\u590D\u5236")) }, "\u590D\u5236"), /* @__PURE__ */ import_react3.default.createElement(Button, { size: "small", onClick: () => window.open(`https://www.wordreference.com/en/definition/${encodeURIComponent(result.text ?? selection.text)}`, "_blank") }, "\u8BCD\u5178"))) : null);
+  return /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-popover", style: { left, top }, onMouseDown: (event) => event.stopPropagation() }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-head" }, /* @__PURE__ */ import_react3.default.createElement("div", null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-word" }, result?.text ?? selection.text), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-subtitle" }, selection.kind === "sentence" ? "\u6574\u53E5\u7FFB\u8BD1" : "\u5355\u8BCD\u7FFB\u8BD1"), result?.phonetic ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-phonetic" }, result.phonetic) : null), /* @__PURE__ */ import_react3.default.createElement("button", { type: "button", className: "nr-pop-close", onClick: onClose, "aria-label": "\u5173\u95ED" }, /* @__PURE__ */ import_react3.default.createElement(Icon, { name: "close", size: 12 }))), loading ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-loading", style: { padding: "18px 0" } }, "\u7FFB\u8BD1\u4E2D\u2026") : null, error ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-explain", style: { color: "var(--dsw-alias-state-error-primary)" } }, error) : null, result && !loading ? /* @__PURE__ */ import_react3.default.createElement(import_react3.default.Fragment, null, /* @__PURE__ */ import_react3.default.createElement("p", { className: "nr-pop-trans" }, result.translation || "\uFF08\u6CA1\u6709\u8BD1\u6587\uFF09"), selection.kind === "sentence" && selection.sentence ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-sentence" }, selection.sentence) : null, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-pop-actions" }, /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "primary", size: "small", onClick: save, disabled: saved || saving }, saved ? "\u5DF2\u5728\u751F\u8BCD\u672C" : saving ? "\u4FDD\u5B58\u4E2D\u2026" : "\u52A0\u5165\u751F\u8BCD\u672C"), /* @__PURE__ */ import_react3.default.createElement(Button, { size: "small", onClick: () => navigator.clipboard?.writeText(selection.text).then(() => notify("\u5DF2\u590D\u5236")) }, "\u590D\u5236"), /* @__PURE__ */ import_react3.default.createElement(Button, { size: "small", onClick: () => window.open(`https://www.wordreference.com/en/definition/${encodeURIComponent(result.text ?? selection.text)}`, "_blank") }, "\u8BCD\u5178"))) : null);
 }
 function ReaderView({ bookId, initialChapter, onBack, onRefresh, notify }) {
   const [detail, setDetail] = (0, import_react3.useState)(null);
@@ -493,6 +574,7 @@ function ReaderView({ bookId, initialChapter, onBack, onRefresh, notify }) {
   const [selection, setSelection] = (0, import_react3.useState)(null);
   const [menu, setMenu] = (0, import_react3.useState)(null);
   const [lookup, setLookup] = (0, import_react3.useState)(null);
+  const [dictionary, setDictionary] = (0, import_react3.useState)(null);
   const [drawer, setDrawer] = (0, import_react3.useState)(null);
   const [savingSelection, setSavingSelection] = (0, import_react3.useState)(false);
   const [bookVocab, setBookVocab] = (0, import_react3.useState)([]);
@@ -625,6 +707,7 @@ function ReaderView({ bookId, initialChapter, onBack, onRefresh, notify }) {
     setSelection(null);
     setMenu(null);
     setLookup(null);
+    setDictionary(null);
     setDrawer(null);
     setChapterPercent(0);
     try {
@@ -671,44 +754,71 @@ function ReaderView({ bookId, initialChapter, onBack, onRefresh, notify }) {
     }
     setSelection(candidate);
     setLookup(null);
+    setDictionary(null);
     setMenu({ x: event.clientX, y: event.clientY });
+  };
+  const openDictionary = () => {
+    if (!selection) return;
+    setDictionary(selection);
+    setLookup(null);
+    setMenu(null);
   };
   const openLookup = () => {
     if (!selection) return;
     setLookup(selection);
+    setDictionary(null);
     setMenu(null);
   };
   const saveSelection = async () => {
     if (!selection) return;
     setSavingSelection(true);
     try {
-      const result = await api("/translate", {
-        method: "POST",
-        body: {
-          text: selection.text,
-          kind: selection.kind,
+      const payload = {
+        term: selection.text,
+        kind: selection.kind,
+        translations: [],
+        definitions: [],
+        phonetic: "",
+        context: {
           bookId,
           chapterIndex,
-          chapterTitle: chapter?.title ?? ""
+          chapterTitle: chapter?.title ?? "",
+          sentence: selection.sentence || selection.text
         }
-      });
-      const saved = await api("/vocab", {
-        method: "POST",
-        body: {
-          term: result?.text ?? selection.text,
-          kind: selection.kind,
-          translation: result?.translation ?? "",
-          translations: result?.translation ? [result.translation] : [],
-          definitions: result?.definitions ?? [],
-          phonetic: result?.phonetic ?? "",
-          context: {
+      };
+      if (selection.kind === "word") {
+        try {
+          const query = new URLSearchParams({ word: selection.text, bookId, chapterIndex: String(chapterIndex), chapterTitle: chapter?.title ?? "" });
+          const dictionary2 = await api(`/dictionary?${query.toString()}`);
+          if (dictionary2.found) {
+            payload.term = dictionary2.word;
+            payload.translations = dictionary2.definitions.map((row) => row.meaning).slice(0, 3);
+            payload.definitions = dictionary2.definitions.map((row) => ({
+              pos: row.pos,
+              text: row.meaning,
+              example: dictionary2.englishDefinitions?.[0]?.examples?.[0] ?? ""
+            }));
+            payload.phonetic = dictionary2.phonetics?.uk?.text || dictionary2.phonetics?.us?.text || "";
+          }
+        } catch {
+        }
+      }
+      if (!payload.translations.length) {
+        const translated = await api("/translate", {
+          method: "POST",
+          body: {
+            text: selection.text,
+            kind: selection.kind,
             bookId,
             chapterIndex,
-            chapterTitle: chapter?.title ?? "",
-            sentence: selection.sentence || selection.text
+            chapterTitle: chapter?.title ?? ""
           }
-        }
-      });
+        });
+        payload.translations = translated.translation ? [translated.translation] : [];
+        payload.phonetic = payload.phonetic || translated.phonetic || "";
+        payload.definitions = payload.definitions.length ? payload.definitions : translated.definitions ?? [];
+      }
+      const saved = await api("/vocab", { method: "POST", body: payload });
       notify(saved.created ? "\u5DF2\u52A0\u5165\u751F\u8BCD\u672C" : "\u8FD9\u4E2A\u8BCD\u5DF2\u7ECF\u5728\u751F\u8BCD\u672C\u91CC\u4E86");
       setMenu(null);
     } catch (err) {
@@ -750,7 +860,7 @@ function ReaderView({ bookId, initialChapter, onBack, onRefresh, notify }) {
     "--nr-reading-width": `${readingWidth}px`,
     "--nr-reading-font": 'Georgia, "Times New Roman", serif'
   }), [fontSize, lineHeight, readingWidth]);
-  return /* @__PURE__ */ import_react3.default.createElement("div", { className: `nr-reader nr-theme-${theme}` }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-top" }, /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: onBack, title: "\u8FD4\u56DE\u4E66\u67B6" }, /* @__PURE__ */ import_react3.default.createElement(Icon, { name: "arrowLeft", size: 15 }), " \u4E66\u67B6"), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-title" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-book" }, title), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-chapter" }, chapter?.title ?? "\u52A0\u8F7D\u4E2D\u2026")), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => openDrawer("toc") }, "\u76EE\u5F55"), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => openDrawer("type") }, "Aa"), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => openDrawer("vocab") }, "\u751F\u8BCD ", bookVocab.length ? `(${bookVocab.length})` : ""), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => loadChapter(chapterIndex + 1), disabled: chapterIndex + 1 >= (detail?.book?.chapterCount ?? 0) }, "\u4E0B\u4E00\u7AE0")), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-main" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-scroll", ref: scrollRef, onScroll: scheduleSave }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-tip" }, "\u53CC\u51FB\u6216\u62D6\u9009\u6587\u5B57\u540E\uFF0C\u53F3\u952E\u6253\u5F00\u83DC\u5355\uFF1A\u7FFB\u8BD1\u3001\u52A0\u5165\u751F\u8BCD\u672C\u6216\u590D\u5236"), error ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-empty", style: { maxWidth: 620, margin: "40px auto" } }, /* @__PURE__ */ import_react3.default.createElement("h3", null, "\u8FD9\u4E00\u7AE0\u6253\u4E0D\u5F00"), /* @__PURE__ */ import_react3.default.createElement("p", null, error), /* @__PURE__ */ import_react3.default.createElement(Button, { onClick: () => loadChapter(chapterIndex) }, "\u91CD\u8BD5")) : null, loading && !chapter ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-loading" }, "\u6B63\u5728\u6253\u5F00\u8FD9\u4E00\u7AE0\u2026") : null, chapter ? /* @__PURE__ */ import_react3.default.createElement(
+  return /* @__PURE__ */ import_react3.default.createElement("div", { className: `nr-reader nr-theme-${theme}` }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-top" }, /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: onBack, title: "\u8FD4\u56DE\u4E66\u67B6" }, /* @__PURE__ */ import_react3.default.createElement(Icon, { name: "arrowLeft", size: 15 }), " \u4E66\u67B6"), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-title" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-book" }, title), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-chapter" }, chapter?.title ?? "\u52A0\u8F7D\u4E2D\u2026")), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => openDrawer("toc") }, "\u76EE\u5F55"), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => openDrawer("type") }, "Aa"), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => openDrawer("vocab") }, "\u751F\u8BCD ", bookVocab.length ? `(${bookVocab.length})` : ""), /* @__PURE__ */ import_react3.default.createElement(Button, { variant: "ghost", size: "small", onClick: () => loadChapter(chapterIndex + 1), disabled: chapterIndex + 1 >= (detail?.book?.chapterCount ?? 0) }, "\u4E0B\u4E00\u7AE0")), /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-main" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-scroll", ref: scrollRef, onScroll: scheduleSave }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-reader-tip" }, "\u5355\u8BCD\uFF1A\u9009\u4E2D\u540E\u53F3\u952E\u67E5\u8BCD\u5178 \xB7 \u53E5\u5B50\uFF1A\u62D6\u9009\u540E\u53F3\u952E\u7FFB\u8BD1\u6574\u53E5"), error ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-empty", style: { maxWidth: 620, margin: "40px auto" } }, /* @__PURE__ */ import_react3.default.createElement("h3", null, "\u8FD9\u4E00\u7AE0\u6253\u4E0D\u5F00"), /* @__PURE__ */ import_react3.default.createElement("p", null, error), /* @__PURE__ */ import_react3.default.createElement(Button, { onClick: () => loadChapter(chapterIndex) }, "\u91CD\u8BD5")) : null, loading && !chapter ? /* @__PURE__ */ import_react3.default.createElement("div", { className: "nr-loading" }, "\u6B63\u5728\u6253\u5F00\u8FD9\u4E00\u7AE0\u2026") : null, chapter ? /* @__PURE__ */ import_react3.default.createElement(
     "div",
     {
       className: "nr-reading",
@@ -791,9 +901,20 @@ function ReaderView({ bookId, initialChapter, onBack, onRefresh, notify }) {
       selection,
       saving: savingSelection,
       onClose: () => setMenu(null),
+      onDictionary: openDictionary,
       onTranslate: openLookup,
       onSave: saveSelection,
       onCopy: copySelection
+    }
+  ) : null, dictionary && detail ? /* @__PURE__ */ import_react3.default.createElement(
+    DictionaryPopover,
+    {
+      selection: dictionary,
+      book: detail.book,
+      chapterIndex,
+      chapterTitle: chapter?.title ?? "",
+      onClose: () => setDictionary(null),
+      notify
     }
   ) : null, lookup && detail ? /* @__PURE__ */ import_react3.default.createElement(
     LookupPopover,
@@ -1476,6 +1597,18 @@ var CSS = `
 .nr-pop-head { display: flex; align-items: flex-start; gap: 8px; }
 .nr-pop-word { font-size: 19px; line-height: 25px; font-weight: 680; }
 .nr-pop-phonetic { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary, #8b93a1); margin-top: 1px; }
+.nr-pop-subtitle { font-size: 10.5px; line-height: 16px; color: var(--dsw-alias-label-tertiary, #8b93a1); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+.nr-dict-phonetics { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 4px; font-size: 12px; color: var(--dsw-alias-label-secondary, #5c6570); }
+.nr-dict-phonetics b { font-size: 10px; color: var(--dsw-alias-label-tertiary, #8b93a1); margin-right: 4px; }
+.nr-audio-btn { display: inline-grid; place-items: center; width: 21px; height: 21px; margin-left: 2px; padding: 0; border: 0; border-radius: 5px; background: var(--dsw-alias-bg-layer-2, #f3f4f6); color: var(--dsw-alias-label-secondary, #5c6570); cursor: pointer; vertical-align: middle; }
+.nr-dict-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0; }
+.nr-dict-section { border-top: 1px solid var(--dsw-alias-border-l1, #eef0f3); padding-top: 10px; margin-top: 10px; }
+.nr-dict-title { font-size: 10.5px; line-height: 16px; color: var(--dsw-alias-label-tertiary, #8b93a1); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 6px; }
+.nr-dict-def { font-size: 12.5px; line-height: 20px; color: var(--dsw-alias-label-primary, #1f2328); margin-bottom: 5px; }
+.nr-dict-def b, .nr-dict-en b { font-weight: 600; color: var(--dsw-alias-label-secondary, #5c6570); margin-right: 4px; }
+.nr-dict-en { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary, #5c6570); margin-bottom: 7px; }
+.nr-dict-en small, .nr-dict-example small { display: block; color: var(--dsw-alias-label-tertiary, #8b93a1); font-size: 11px; line-height: 17px; margin-top: 2px; }
+.nr-dict-example { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary, #1f2328); margin-bottom: 7px; }
 .nr-pop-close { margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--dsw-alias-label-tertiary, #8b93a1); cursor: pointer; }
 .nr-pop-trans { font-size: 14px; line-height: 22px; margin: 10px 0 0; color: var(--dsw-alias-label-primary, #1f2328); }
 .nr-pop-defs { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }

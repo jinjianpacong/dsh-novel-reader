@@ -53,7 +53,7 @@ function wordAtPoint(x, y) {
   }
 }
 
-function SelectionMenu({ menu, selection, saving, onClose, onTranslate, onSave, onCopy }) {
+function SelectionMenu({ menu, selection, saving, onClose, onDictionary, onTranslate, onSave, onCopy }) {
   const ref = useRef(null)
   useEffect(() => {
     const closeOnOutside = (event) => { if (!ref.current?.contains(event.target)) onClose() }
@@ -71,12 +71,152 @@ function SelectionMenu({ menu, selection, saving, onClose, onTranslate, onSave, 
   return (
     <div className="nr-context-menu" ref={ref} style={{ left, top }} onMouseDown={(event) => event.stopPropagation()}>
       <div className="nr-menu-label">{selection.text.length > 42 ? `${selection.text.slice(0, 42)}…` : selection.text}</div>
-      <button type="button" onClick={onTranslate}>{isSentence ? '翻译这句话' : '查这个词'}</button>
-      <button type="button" onClick={onSave} disabled={saving}>{saving ? '保存中…' : isSentence ? '收藏这个句子' : '加入生词本'}</button>
+      {isSentence ? (
+        <>
+          <button type="button" onClick={onTranslate}>翻译整句</button>
+          <button type="button" onClick={onSave} disabled={saving}>{saving ? '保存中…' : '收藏这个句子'}</button>
+        </>
+      ) : (
+        <>
+          <button type="button" onClick={onDictionary}>查词典</button>
+          <button type="button" onClick={onTranslate}>翻译这个词</button>
+          <button type="button" onClick={onSave} disabled={saving}>{saving ? '保存中…' : '加入生词本'}</button>
+        </>
+      )}
       <button type="button" onClick={onCopy}>复制</button>
     </div>
   )
 }
+
+function DictionaryPopover({ selection, book, chapterIndex, chapterTitle, onClose, notify }) {
+  const [loading, setLoading] = useState(true)
+  const [entry, setEntry] = useState(null)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError('')
+    setEntry(null)
+    setSaved(false)
+    const query = new URLSearchParams({
+      word: selection.text,
+      bookId: book.id,
+      chapterIndex: String(chapterIndex),
+      chapterTitle,
+    })
+    api(`/dictionary?${query.toString()}`).then((data) => {
+      if (alive) { setEntry(data); setLoading(false) }
+    }).catch((err) => {
+      if (alive) { setError(err.message); setLoading(false) }
+    })
+    return () => { alive = false }
+  }, [selection.text, book.id, chapterIndex, chapterTitle])
+
+  const play = (audio) => {
+    if (!audio) return
+    try { new Audio(audio).play().catch(() => notify('发音播放失败', true)) } catch { notify('发音播放失败', true) }
+  }
+
+  const save = async () => {
+    if (!entry?.found) return
+    setSaving(true)
+    try {
+      const definitions = entry.definitions.map((row) => ({
+        pos: row.pos,
+        text: row.meaning,
+        example: entry.englishDefinitions?.[0]?.examples?.[0] ?? '',
+      }))
+      await api('/vocab', {
+        method: 'POST',
+        body: {
+          term: entry.word,
+          kind: 'word',
+          translations: entry.definitions.map((row) => row.meaning).slice(0, 3),
+          definitions,
+          phonetic: entry.phonetics?.uk?.text || entry.phonetics?.us?.text || '',
+          context: {
+            bookId: book.id,
+            chapterIndex,
+            chapterTitle,
+            sentence: selection.sentence || selection.text,
+          },
+        },
+      })
+      setSaved(true)
+      notify('已加入生词本')
+    } catch (err) {
+      notify(err.message, true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const width = 390
+  const left = Math.min(Math.max(12, selection.rect.left), window.innerWidth - width - 12)
+  const top = Math.min(Math.max(12, selection.rect.bottom + 8), Math.max(12, window.innerHeight - 520))
+  const uk = entry?.phonetics?.uk
+  const us = entry?.phonetics?.us
+
+  return (
+    <div className="nr-popover nr-dictionary" style={{ left, top, width }} onMouseDown={(event) => event.stopPropagation()}>
+      <div className="nr-pop-head">
+        <div>
+          <div className="nr-pop-word">{entry?.word ?? selection.text}</div>
+          <div className="nr-pop-subtitle">词典释义</div>
+        </div>
+        <button type="button" className="nr-pop-close" onClick={onClose} aria-label="关闭"><Icon name="close" size={12} /></button>
+      </div>
+      {loading ? <div className="nr-loading" style={{ padding: '18px 0' }}>查词典中…</div> : null}
+      {error ? <div className="nr-explain" style={{ color: 'var(--dsw-alias-state-error-primary)' }}>{error}</div> : null}
+      {!loading && entry && !entry.found ? <div className="nr-explain">词典暂未收录 “{selection.text}”，可以试试翻译这个词。</div> : null}
+      {entry?.found ? (
+        <>
+          <div className="nr-dict-phonetics">
+            {uk?.text ? <span><b>UK</b> {uk.text} {uk.audio ? <button type="button" className="nr-audio-btn" onClick={() => play(uk.audio)} aria-label="播放英式发音"><Icon name="volume" size={13} /></button> : null}</span> : null}
+            {us?.text ? <span><b>US</b> {us.text} {us.audio ? <button type="button" className="nr-audio-btn" onClick={() => play(us.audio)} aria-label="播放美式发音"><Icon name="volume" size={13} /></button> : null}</span> : null}
+          </div>
+          {entry.examTags?.length ? <div className="nr-dict-tags">{entry.examTags.map((tag) => <span key={tag} className="nr-chip">{tag}</span>)}</div> : null}
+          {entry.definitions?.length ? (
+            <div className="nr-dict-section">
+              <div className="nr-dict-title">中文释义</div>
+              {entry.definitions.map((row, index) => <div className="nr-dict-def" key={index}>{row.pos ? <b>{row.pos}</b> : null}{row.meaning}</div>)}
+            </div>
+          ) : null}
+          {entry.englishDefinitions?.length ? (
+            <div className="nr-dict-section">
+              <div className="nr-dict-title">英文释义</div>
+              {entry.englishDefinitions.slice(0, 4).map((row, index) => (
+                <div className="nr-dict-en" key={index}>
+                  <div>{row.pos ? <b>{row.pos}</b> : null}{row.definition}</div>
+                  {row.examples?.length ? <small>{row.examples.slice(0, 2).join(' / ')}</small> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {entry.examples?.length ? (
+            <div className="nr-dict-section">
+              <div className="nr-dict-title">例句</div>
+              {entry.examples.slice(0, 3).map((row, index) => (
+                <div className="nr-dict-example" key={index}>
+                  <div>{row.source}</div>
+                  <small>{row.translation}</small>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div className="nr-pop-actions">
+            <Button variant="primary" size="small" onClick={save} disabled={saved || saving}>{saved ? '已在生词本' : saving ? '保存中…' : '加入生词本'}</Button>
+            <Button size="small" onClick={() => navigator.clipboard?.writeText(entry.word).then(() => notify('已复制'))}>复制单词</Button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 
 function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, notify }) {
   const [loading, setLoading] = useState(true)
@@ -149,6 +289,7 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
       <div className="nr-pop-head">
         <div>
           <div className="nr-pop-word">{result?.text ?? selection.text}</div>
+          <div className="nr-pop-subtitle">{selection.kind === 'sentence' ? '整句翻译' : '单词翻译'}</div>
           {result?.phonetic ? <div className="nr-pop-phonetic">{result.phonetic}</div> : null}
         </div>
         <button type="button" className="nr-pop-close" onClick={onClose} aria-label="关闭"><Icon name="close" size={12} /></button>
@@ -158,13 +299,6 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
       {result && !loading ? (
         <>
           <p className="nr-pop-trans">{result.translation || '（没有译文）'}</p>
-          {result.definitions?.length ? (
-            <ul className="nr-pop-defs">
-              {result.definitions.slice(0, 3).map((row, index) => (
-                <li key={index}><b>{row.pos || 'def.'}</b> {row.text}</li>
-              ))}
-            </ul>
-          ) : null}
           {selection.kind === 'sentence' && selection.sentence ? <div className="nr-pop-sentence">{selection.sentence}</div> : null}
           <div className="nr-pop-actions">
             <Button variant="primary" size="small" onClick={save} disabled={saved || saving}>
@@ -188,6 +322,7 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
   const [selection, setSelection] = useState(null)
   const [menu, setMenu] = useState(null)
   const [lookup, setLookup] = useState(null)
+  const [dictionary, setDictionary] = useState(null)
   const [drawer, setDrawer] = useState(null)
   const [savingSelection, setSavingSelection] = useState(false)
   const [bookVocab, setBookVocab] = useState([])
@@ -311,6 +446,7 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
     setSelection(null)
     setMenu(null)
     setLookup(null)
+    setDictionary(null)
     setDrawer(null)
     setChapterPercent(0)
     try {
@@ -358,12 +494,21 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
     }
     setSelection(candidate)
     setLookup(null)
+    setDictionary(null)
     setMenu({ x: event.clientX, y: event.clientY })
+  }
+
+  const openDictionary = () => {
+    if (!selection) return
+    setDictionary(selection)
+    setLookup(null)
+    setMenu(null)
   }
 
   const openLookup = () => {
     if (!selection) return
     setLookup(selection)
+    setDictionary(null)
     setMenu(null)
   }
 
@@ -371,33 +516,53 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
     if (!selection) return
     setSavingSelection(true)
     try {
-      const result = await api('/translate', {
-        method: 'POST',
-        body: {
-          text: selection.text,
-          kind: selection.kind,
+      const payload = {
+        term: selection.text,
+        kind: selection.kind,
+        translations: [],
+        definitions: [],
+        phonetic: '',
+        context: {
           bookId,
           chapterIndex,
           chapterTitle: chapter?.title ?? '',
+          sentence: selection.sentence || selection.text,
         },
-      })
-      const saved = await api('/vocab', {
-        method: 'POST',
-        body: {
-          term: result?.text ?? selection.text,
-          kind: selection.kind,
-          translation: result?.translation ?? '',
-          translations: result?.translation ? [result.translation] : [],
-          definitions: result?.definitions ?? [],
-          phonetic: result?.phonetic ?? '',
-          context: {
+      }
+      if (selection.kind === 'word') {
+        try {
+          const query = new URLSearchParams({ word: selection.text, bookId, chapterIndex: String(chapterIndex), chapterTitle: chapter?.title ?? '' })
+          const dictionary = await api(`/dictionary?${query.toString()}`)
+          if (dictionary.found) {
+            payload.term = dictionary.word
+            payload.translations = dictionary.definitions.map((row) => row.meaning).slice(0, 3)
+            payload.definitions = dictionary.definitions.map((row) => ({
+              pos: row.pos,
+              text: row.meaning,
+              example: dictionary.englishDefinitions?.[0]?.examples?.[0] ?? '',
+            }))
+            payload.phonetic = dictionary.phonetics?.uk?.text || dictionary.phonetics?.us?.text || ''
+          }
+        } catch {
+          // Fall back to the translation route below.
+        }
+      }
+      if (!payload.translations.length) {
+        const translated = await api('/translate', {
+          method: 'POST',
+          body: {
+            text: selection.text,
+            kind: selection.kind,
             bookId,
             chapterIndex,
             chapterTitle: chapter?.title ?? '',
-            sentence: selection.sentence || selection.text,
           },
-        },
-      })
+        })
+        payload.translations = translated.translation ? [translated.translation] : []
+        payload.phonetic = payload.phonetic || translated.phonetic || ''
+        payload.definitions = payload.definitions.length ? payload.definitions : translated.definitions ?? []
+      }
+      const saved = await api('/vocab', { method: 'POST', body: payload })
       notify(saved.created ? '已加入生词本' : '这个词已经在生词本里了')
       setMenu(null)
     } catch (err) {
@@ -457,7 +622,7 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
 
       <div className="nr-reader-main">
         <div className="nr-reader-scroll" ref={scrollRef} onScroll={scheduleSave}>
-          <div className="nr-reader-tip">双击或拖选文字后，右键打开菜单：翻译、加入生词本或复制</div>
+          <div className="nr-reader-tip">单词：选中后右键查词典 · 句子：拖选后右键翻译整句</div>
           {error ? <div className="nr-empty" style={{ maxWidth: 620, margin: '40px auto' }}><h3>这一章打不开</h3><p>{error}</p><Button onClick={() => loadChapter(chapterIndex)}>重试</Button></div> : null}
           {loading && !chapter ? <div className="nr-loading">正在打开这一章…</div> : null}
           {chapter ? (
@@ -532,9 +697,21 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
           selection={selection}
           saving={savingSelection}
           onClose={() => setMenu(null)}
+          onDictionary={openDictionary}
           onTranslate={openLookup}
           onSave={saveSelection}
           onCopy={copySelection}
+        />
+      ) : null}
+
+      {dictionary && detail ? (
+        <DictionaryPopover
+          selection={dictionary}
+          book={detail.book}
+          chapterIndex={chapterIndex}
+          chapterTitle={chapter?.title ?? ''}
+          onClose={() => setDictionary(null)}
+          notify={notify}
         />
       ) : null}
 

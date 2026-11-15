@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Novel Reader",
-    "description": "An English novel reader. Open Books from the Reading entry in the sidebar, import EPUB/TXT/Markdown files, double-click a word for phonetics and definitions, select a sentence to translate it, and save words with their source sentence to the vocabulary notebook. The notebook supports tags, notes and spaced review, and can generate multiple-choice, cloze and spelling quizzes. Reading progress, lookup and quiz history live in $DSH_HOME/novel-reader; WebDAV sync for books, vocabulary and history is in Settings. DRM-protected ebooks and PDF import are not supported."
+    "description": "An English novel reader. Open Books from the Reading entry in the sidebar, import EPUB/TXT/Markdown files, select a word and right-click to look it up in the UAPI dictionary (phonetics, Chinese and English definitions, examples), select a sentence and right-click to translate it, and save words with their source sentence to the vocabulary notebook. The notebook supports tags, notes and spaced review, and can generate multiple-choice, cloze and spelling quizzes. Reading progress, lookup and quiz history live in $DSH_HOME/novel-reader; WebDAV sync for books, vocabulary and history is in Settings. DRM-protected ebooks and PDF import are not supported."
   },
   "nav": "Reading",
   "ui": {
