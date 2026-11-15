@@ -175,6 +175,7 @@ export function createRouter({ ctx, store, sync }) {
         const fileName = decodeURIComponent(String(req.headers['x-file-name'] ?? 'book.epub'))
         const buffer = await readBuffer(req, 200 * 1024 * 1024)
         const result = await importBook(store, buffer, fileName)
+        sync.schedule(3000)
         return ok(res, result)
       }
 
@@ -225,6 +226,7 @@ export function createRouter({ ctx, store, sync }) {
           row.updatedAt = nowIso()
           return row
         })
+        sync.schedule(8000)
         return ok(res, { book })
       }
 
@@ -280,17 +282,20 @@ export function createRouter({ ctx, store, sync }) {
       if (method === 'POST' && path === 'vocab') {
         const body = await readJson(req)
         const result = await addVocab(store, body)
+        sync.schedule(3000)
         return ok(res, result)
       }
 
       if (method === 'PATCH' && segments[0] === 'vocab' && segments[1]) {
         const patch = await readJson(req)
         const entry = await updateVocab(store, segments[1], patch)
+        sync.schedule(3000)
         return ok(res, { entry })
       }
 
       if (method === 'DELETE' && segments[0] === 'vocab' && segments[1]) {
         const entry = await deleteVocab(store, segments[1])
+        sync.schedule(3000)
         return ok(res, { entry })
       }
 
@@ -298,6 +303,7 @@ export function createRouter({ ctx, store, sync }) {
         const body = await readJson(req)
         const rating = ['again', 'hard', 'good', 'easy'].includes(body.rating) ? body.rating : 'good'
         const entry = await reviewVocab(store, segments[1], rating)
+        sync.schedule(3000)
         return ok(res, { entry })
       }
 
@@ -392,6 +398,7 @@ export function createRouter({ ctx, store, sync }) {
       if (method === 'POST' && segments[0] === 'history' && segments[1] === 'session' && segments[2] === 'end') {
         const body = await readJson(req)
         const session = await endSession(store, body)
+        sync.schedule(3000)
         return ok(res, { session })
       }
 

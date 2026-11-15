@@ -17,6 +17,7 @@ export async function apply(ctx) {
     () => ctx.webServer.register({ kind: 'prefix', path: '/novel-reader', handler }),
     'novel-reader: /novel-reader routes',
   )
+  ctx.effect(() => () => sync.dispose(), 'novel-reader: WebDAV sync timer cleanup')
   ctx.effect(() => {
     const timer = setInterval(async () => {
       try {

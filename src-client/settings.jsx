@@ -253,6 +253,7 @@ export default function SettingsView({ state, notify, onRefresh }) {
             <Toggle checked={Boolean(syncForm.syncBooks)} onChange={(value) => updateSync('syncBooks', value)} label="同步小说文件" disabled={!syncForm.enabled} />
             <Toggle checked={Boolean(syncForm.syncHistory)} onChange={(value) => updateSync('syncHistory', value)} label="同步历史记录" disabled={!syncForm.enabled} />
           </div>
+          <p className="nr-sub" style={{ marginTop: 10 }}>启用后，导入图书、退出阅读器、保存生词或阅读进度时会在几秒后自动同步；此外还可设置每 5 分钟自动同步。</p>
           <div className="nr-row" style={{ marginTop: 16 }}>
             <Button variant="primary" onClick={saveSync} disabled={busy}>保存 WebDAV 设置</Button>
             <Button onClick={test} disabled={syncBusy}>保存并测试</Button>

@@ -14,7 +14,7 @@ Open the **Reading** entry in the left sidebar. The plugin opens a full-page lib
 - Save words or phrases to the vocabulary notebook together with the exact sentence, book and chapter where they appeared.
 - Review vocabulary with a simplified SM-2 schedule and generate quizzes from a chosen scope: English→Chinese, Chinese→English, cloze, spelling and context questions. Quizzes use the current model when available and fall back to a local generator.
 - Track reading sessions, lookups and quiz attempts in **History**.
-- Optionally sync books, vocabulary, reading progress and history over **WebDAV** (Basic Auth over HTTPS). The password is stored through the harness credential service, not in the data file.
+- Optionally sync books, vocabulary, reading progress and history over **WebDAV** (Basic Auth over HTTPS). Importing a book, leaving the reader, saving vocabulary or saving reading progress schedules a sync; a 5-minute periodic option and a manual **Sync now** button are also available. The password is stored through the harness credential service, not in the data file.
 
 ## Data and limitations
 

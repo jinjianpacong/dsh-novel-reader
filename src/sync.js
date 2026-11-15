@@ -86,11 +86,36 @@ export class WebDavSync {
     this.ctx = ctx
     this.store = store
     this.lock = false
+    this.timer = null
   }
 
   async settings() {
     const state = await this.store.read()
     return state.settings.sync
+  }
+
+  schedule(delay = 5000) {
+    if (!this.timer) {
+      this.timer = setTimeout(async () => {
+        this.timer = null
+        try {
+          const settings = await this.settings()
+          if (!settings.enabled) return
+          if (this.lock) {
+            this.schedule(5000)
+            return
+          }
+          await this.sync()
+        } catch {
+          // Background sync failures stay in sync status; local changes are already durable.
+        }
+      }, delay)
+    }
+  }
+
+  dispose() {
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
   }
 
   async password() {
