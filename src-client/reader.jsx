@@ -224,6 +224,22 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const boxRef = useRef(null)
+
+  useEffect(() => {
+    const closeOnOutside = (event) => {
+      if (boxRef.current && !boxRef.current.contains(event.target)) onClose()
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', closeOnOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [onClose])
 
   useEffect(() => {
     let alive = true
@@ -285,7 +301,7 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
     : Math.max(12, selection.rect.top - estimated - 8)
 
   return (
-    <div className="nr-popover" style={{ left, top }} onMouseDown={(event) => event.stopPropagation()}>
+    <div className="nr-popover" ref={boxRef} style={{ left, top }} onMouseDown={(event) => event.stopPropagation()}>
       <div className="nr-pop-head">
         <div>
           <div className="nr-pop-word">{result?.text ?? selection.text}</div>
