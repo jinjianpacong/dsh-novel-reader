@@ -186,6 +186,7 @@ export const CSS = `
   border: 1px solid var(--dsw-alias-border-l2, #d9dde3); border-radius: 12px; background: var(--dsw-alias-bg-overlay, #fff);
   box-shadow: 0 18px 50px rgba(16,20,28,.2); padding: 14px;
 }
+.nr-pop-backdrop { position: fixed; inset: 0; z-index: 899; background: transparent; }
 .nr-context-menu {
   position: fixed; z-index: 950; min-width: 196px; padding: 6px;
   border: 1px solid var(--dsw-alias-border-l2, #d9dde3); border-radius: 10px; background: var(--dsw-alias-bg-overlay, #fff);

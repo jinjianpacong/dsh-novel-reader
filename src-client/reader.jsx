@@ -88,12 +88,33 @@ function SelectionMenu({ menu, selection, saving, onClose, onDictionary, onTrans
   )
 }
 
+function PopoverBackdrop({ onClose }) {
+  return (
+    <div
+      className="nr-pop-backdrop"
+      onMouseDown={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onClose()
+      }}
+    />
+  )
+}
+
 function DictionaryPopover({ selection, book, chapterIndex, chapterTitle, onClose, notify }) {
   const [loading, setLoading] = useState(true)
   const [entry, setEntry] = useState(null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => document.removeEventListener('keydown', closeOnEscape, true)
+  }, [onClose])
 
   useEffect(() => {
     let alive = true
@@ -161,8 +182,10 @@ function DictionaryPopover({ selection, book, chapterIndex, chapterTitle, onClos
   const us = entry?.phonetics?.us
 
   return (
-    <div className="nr-popover nr-dictionary" style={{ left, top, width }} onMouseDown={(event) => event.stopPropagation()}>
-      <div className="nr-pop-head">
+    <>
+      <PopoverBackdrop onClose={onClose} />
+      <div className="nr-popover nr-dictionary" style={{ left, top, width }} onMouseDown={(event) => event.stopPropagation()}>
+        <div className="nr-pop-head">
         <div>
           <div className="nr-pop-word">{entry?.word ?? selection.text}</div>
           <div className="nr-pop-subtitle">词典释义</div>
@@ -213,7 +236,8 @@ function DictionaryPopover({ selection, book, chapterIndex, chapterTitle, onClos
           </div>
         </>
       ) : null}
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -233,11 +257,11 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
     const closeOnEscape = (event) => {
       if (event.key === 'Escape') onClose()
     }
-    document.addEventListener('mousedown', closeOnOutside)
-    document.addEventListener('keydown', closeOnEscape)
+    document.addEventListener('pointerdown', closeOnOutside, true)
+    document.addEventListener('keydown', closeOnEscape, true)
     return () => {
-      document.removeEventListener('mousedown', closeOnOutside)
-      document.removeEventListener('keydown', closeOnEscape)
+      document.removeEventListener('pointerdown', closeOnOutside, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
     }
   }, [onClose])
 
@@ -301,8 +325,10 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
     : Math.max(12, selection.rect.top - estimated - 8)
 
   return (
-    <div className="nr-popover" ref={boxRef} style={{ left, top }} onMouseDown={(event) => event.stopPropagation()}>
-      <div className="nr-pop-head">
+    <>
+      <PopoverBackdrop onClose={onClose} />
+      <div className="nr-popover" ref={boxRef} style={{ left, top }} onMouseDown={(event) => event.stopPropagation()}>
+        <div className="nr-pop-head">
         <div>
           <div className="nr-pop-word">{result?.text ?? selection.text}</div>
           <div className="nr-pop-subtitle">{selection.kind === 'sentence' ? '整句翻译' : '单词翻译'}</div>
@@ -325,7 +351,8 @@ function LookupPopover({ selection, book, chapterIndex, chapterTitle, onClose, n
           </div>
         </>
       ) : null}
-    </div>
+      </div>
+    </>
   )
 }
 
