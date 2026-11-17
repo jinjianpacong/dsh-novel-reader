@@ -37,6 +37,8 @@ export default function SettingsView({ state, notify, onRefresh }) {
           showEnglishDefinition: Boolean(form.showEnglishDefinition),
           autoSaveLookups: Boolean(form.autoSaveLookups),
           slackingMode: Boolean(form.slackingMode),
+          slackingWidth: Number(form.slackingWidth) || 1100,
+          slackingSentences: Number(form.slackingSentences) || 2,
         },
       })
       notify('设置已保存')
@@ -207,6 +209,19 @@ export default function SettingsView({ state, notify, onRefresh }) {
           </div>
           <div className="nr-row" style={{ marginTop: 14 }}>
             <Toggle checked={Boolean(form.slackingMode)} onChange={(value) => update('slackingMode', value)} label="摸鱼模式（阅读界面伪装成对话）" />
+          </div>
+          <div className="nr-form-grid" style={{ marginTop: 12 }}>
+            <Field label="摸鱼页宽度" hint="800–1600 像素，默认 1100">
+              <input className="nr-input" type="number" min="800" max="1600" step="50" value={form.slackingWidth ?? 1100} onChange={(event) => update('slackingWidth', event.target.value)} />
+            </Field>
+            <Field label="每条气泡句数" hint="每条气泡最多显示几句，默认 2">
+              <select className="nr-select" value={form.slackingSentences ?? 2} onChange={(event) => update('slackingSentences', Number(event.target.value))}>
+                <option value={1}>1 句</option>
+                <option value={2}>2 句</option>
+                <option value={3}>3 句</option>
+                <option value={4}>4 句</option>
+              </select>
+            </Field>
           </div>
         </div>
 

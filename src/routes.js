@@ -20,7 +20,7 @@ function publicSettings(settings, passwordConfigured, dataDir) {
 }
 
 function pickSettings(patch) {
-  const allowed = ['targetLanguage', 'theme', 'fontSize', 'lineHeight', 'fontFamily', 'maxWidth', 'dailyNewWords', 'dailyReviewLimit', 'translationEngine', 'showEnglishDefinition', 'autoSaveLookups', 'slackingMode']
+  const allowed = ['targetLanguage', 'theme', 'fontSize', 'lineHeight', 'fontFamily', 'maxWidth', 'dailyNewWords', 'dailyReviewLimit', 'translationEngine', 'showEnglishDefinition', 'autoSaveLookups', 'slackingMode', 'slackingWidth', 'slackingSentences']
   const next = {}
   for (const key of allowed) if (patch[key] !== undefined) next[key] = patch[key]
   return next
@@ -422,6 +422,8 @@ export function createRouter({ ctx, store, sync }) {
       if (method === 'PATCH' && path === 'settings') {
         const body = await readJson(req)
         const settingsPatch = pickSettings(body)
+        if (settingsPatch.slackingWidth !== undefined) settingsPatch.slackingWidth = clamp(Number(settingsPatch.slackingWidth) || 1100, 800, 1600)
+        if (settingsPatch.slackingSentences !== undefined) settingsPatch.slackingSentences = clamp(Math.round(Number(settingsPatch.slackingSentences) || 2), 1, 4)
         const syncPatch = body.sync && typeof body.sync === 'object' ? pickSync(body.sync) : {}
         const updated = await store.mutate((state) => {
           Object.assign(state.settings, settingsPatch)

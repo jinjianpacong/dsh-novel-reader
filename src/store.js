@@ -19,6 +19,8 @@ function defaultSettings() {
     showEnglishDefinition: true,
     autoSaveLookups: true,
     slackingMode: false,
+    slackingWidth: 1100,
+    slackingSentences: 2,
     sync: {
       enabled: false,
       url: '',

@@ -19,7 +19,75 @@ function escapeHtmlText(text) {
   return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function splitChapterBlocks(html) {
+function sentenceSegments(text) {
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    return [...new Intl.Segmenter('en', { granularity: 'sentence' }).segment(text)]
+      .map((row) => ({ start: row.index, end: row.index + row.segment.length, text: row.segment }))
+  }
+  const result = []
+  const regex = /[^.!?]+[.!?]+(?:["'”’)\]]*)\s*|[^.!?]+$/g
+  let match
+  while ((match = regex.exec(text)) !== null) {
+    result.push({ start: match.index, end: match.index + match[0].length, text: match[0] })
+  }
+  return result
+}
+
+function textPoints(root) {
+  const points = []
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let total = 0
+  while (walker.nextNode()) {
+    const node = walker.currentNode
+    const length = node.data.length
+    points.push({ node, start: total, end: total + length })
+    total += length
+  }
+  return points
+}
+
+function pointAtOffset(points, offset) {
+  for (const point of points) {
+    if (offset <= point.end) {
+      return { node: point.node, offset: Math.max(0, Math.min(point.node.data.length, offset - point.start)) }
+    }
+  }
+  const last = points[points.length - 1]
+  return last ? { node: last.node, offset: last.node.data.length } : null
+}
+
+function splitParagraph(el, sentencesPerBubble) {
+  const text = el.textContent ?? ''
+  const segments = sentenceSegments(text).filter((row) => row.text.trim())
+  if (segments.length <= sentencesPerBubble) return [el.outerHTML]
+  const points = textPoints(el)
+  const chunks = []
+  for (let index = 0; index < segments.length; index += sentencesPerBubble) {
+    const group = segments.slice(index, index + sentencesPerBubble)
+    const first = group[0]
+    const last = group[group.length - 1]
+    const startText = first.text
+    const endText = last.text
+    const startTrim = startText.length - startText.trimStart().length
+    const endTrim = endText.length - endText.trimEnd().length
+    const start = pointAtOffset(points, first.start + startTrim)
+    const end = pointAtOffset(points, last.end - endTrim)
+    if (!start || !end) continue
+    const range = document.createRange()
+    try {
+      range.setStart(start.node, start.offset)
+      range.setEnd(end.node, end.offset)
+      const paragraph = document.createElement('p')
+      paragraph.appendChild(range.cloneContents())
+      if (paragraph.textContent.trim()) chunks.push(paragraph.outerHTML)
+    } catch {
+      // A malformed range keeps the paragraph intact below.
+    }
+  }
+  return chunks.length ? chunks : [el.outerHTML]
+}
+
+function splitChapterBlocks(html, sentencesPerBubble = 2) {
   if (!html) return []
   const wrapper = document.createElement('div')
   wrapper.innerHTML = html
@@ -27,15 +95,31 @@ function splitChapterBlocks(html) {
   if (wrapper.children.length === 1 && wrapper.firstElementChild.tagName === 'DIV' && wrapper.firstElementChild.children.length > 1) {
     nodes = [...wrapper.firstElementChild.childNodes]
   }
-  return nodes.flatMap((node) => {
+  const blocks = []
+  for (const node of nodes) {
     if (node.nodeType === 3) {
       const text = node.textContent.trim()
-      return text ? [{ kind: 'block', html: `<p>${escapeHtmlText(text)}</p>` }] : []
+      if (text) blocks.push({ kind: 'block', html: `<p>${escapeHtmlText(text)}</p>` })
+      continue
     }
-    if (node.nodeType !== 1) return []
+    if (node.nodeType !== 1) continue
     const tag = node.tagName.toLowerCase()
-    return [{ kind: /^h[1-6]$/.test(tag) ? 'heading' : 'block', html: node.outerHTML }]
-  })
+    if (/^h[1-6]$/.test(tag)) {
+      blocks.push({ kind: 'heading', html: node.outerHTML })
+      continue
+    }
+    if (tag === 'div' && node.children.length > 1) {
+      for (const child of [...node.children]) {
+        blocks.push(...(child.tagName?.toLowerCase() === 'p'
+          ? splitParagraph(child, sentencesPerBubble).map((html) => ({ kind: 'block', html }))
+          : [{ kind: 'block', html: child.outerHTML }]))
+      }
+      continue
+    }
+    if (tag === 'p') blocks.push(...splitParagraph(node, sentencesPerBubble).map((html) => ({ kind: 'block', html })))
+    else blocks.push({ kind: 'block', html: node.outerHTML })
+  }
+  return blocks
 }
 
 function StealthMenu({ onClose, onExit, onDrawer }) {
@@ -414,6 +498,8 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
   const [bookVocab, setBookVocab] = useState([])
   const [stealth, setStealth] = useState(false)
   const [stealthMenu, setStealthMenu] = useState(false)
+  const [stealthWidth, setStealthWidth] = useState(1100)
+  const [stealthSentences, setStealthSentences] = useState(2)
   const [fontSize, setFontSize] = useState(18)
   const [lineHeight, setLineHeight] = useState(1.9)
   const [readingWidth, setReadingWidth] = useState(720)
@@ -455,6 +541,8 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
       setReadingWidth(Number(data.maxWidth) || 720)
       setTheme(data.theme || 'paper')
       setStealth(Boolean(data.slackingMode))
+      setStealthWidth(Number(data.slackingWidth) || 1100)
+      setStealthSentences(Math.max(1, Math.min(4, Number(data.slackingSentences) || 2)))
     }).catch(() => {})
   }, [])
 
@@ -688,7 +776,7 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
 
   const title = detail?.book?.title ?? ''
   const chapters = detail?.chapters ?? []
-  const chapterBlocks = useMemo(() => splitChapterBlocks(chapter?.html ?? ''), [chapter])
+  const chapterBlocks = useMemo(() => splitChapterBlocks(chapter?.html ?? '', stealthSentences), [chapter, stealthSentences])
   const changeStealth = async (next) => {
     setStealth(next)
     setStealthMenu(false)
@@ -705,7 +793,8 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
     '--nr-reading-leading': lineHeight,
     '--nr-reading-width': `${readingWidth}px`,
     '--nr-reading-font': 'Georgia, "Times New Roman", serif',
-  }), [fontSize, lineHeight, readingWidth])
+    '--nr-stealth-width': `${stealthWidth}px`,
+  }), [fontSize, lineHeight, readingWidth, stealthWidth])
 
   return (
     <div className={`nr-reader nr-theme-${theme} ${stealth ? 'is-stealth' : ''}`}>
