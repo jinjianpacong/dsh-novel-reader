@@ -20,7 +20,7 @@ function publicSettings(settings, passwordConfigured, dataDir) {
 }
 
 function pickSettings(patch) {
-  const allowed = ['targetLanguage', 'theme', 'fontSize', 'lineHeight', 'fontFamily', 'maxWidth', 'dailyNewWords', 'dailyReviewLimit', 'translationEngine', 'showEnglishDefinition', 'autoSaveLookups']
+  const allowed = ['targetLanguage', 'theme', 'fontSize', 'lineHeight', 'fontFamily', 'maxWidth', 'dailyNewWords', 'dailyReviewLimit', 'translationEngine', 'showEnglishDefinition', 'autoSaveLookups', 'slackingMode']
   const next = {}
   for (const key of allowed) if (patch[key] !== undefined) next[key] = patch[key]
   return next

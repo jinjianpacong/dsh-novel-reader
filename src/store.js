@@ -18,6 +18,7 @@ function defaultSettings() {
     translationEngine: 'auto',
     showEnglishDefinition: true,
     autoSaveLookups: true,
+    slackingMode: false,
     sync: {
       enabled: false,
       url: '',

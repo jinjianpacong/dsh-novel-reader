@@ -15,6 +15,49 @@ function sentenceAround(paragraph, selected) {
   return sentence.length <= 600 ? sentence : text.slice(0, 600)
 }
 
+function escapeHtmlText(text) {
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function splitChapterBlocks(html) {
+  if (!html) return []
+  const wrapper = document.createElement('div')
+  wrapper.innerHTML = html
+  let nodes = [...wrapper.childNodes]
+  if (wrapper.children.length === 1 && wrapper.firstElementChild.tagName === 'DIV' && wrapper.firstElementChild.children.length > 1) {
+    nodes = [...wrapper.firstElementChild.childNodes]
+  }
+  return nodes.flatMap((node) => {
+    if (node.nodeType === 3) {
+      const text = node.textContent.trim()
+      return text ? [{ kind: 'block', html: `<p>${escapeHtmlText(text)}</p>` }] : []
+    }
+    if (node.nodeType !== 1) return []
+    const tag = node.tagName.toLowerCase()
+    return [{ kind: /^h[1-6]$/.test(tag) ? 'heading' : 'block', html: node.outerHTML }]
+  })
+}
+
+function StealthMenu({ onClose, onExit, onDrawer }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const closeOnOutside = (event) => {
+      if (event.target?.closest?.('.nr-stealth-menu-btn')) return
+      if (!ref.current?.contains(event.target)) onClose()
+    }
+    document.addEventListener('pointerdown', closeOnOutside, true)
+    return () => document.removeEventListener('pointerdown', closeOnOutside, true)
+  }, [onClose])
+  return (
+    <div className="nr-stealth-menu" ref={ref}>
+      <button type="button" onClick={onExit}>退出摸鱼模式</button>
+      <button type="button" onClick={() => onDrawer('toc')}>目录</button>
+      <button type="button" onClick={() => onDrawer('type')}>阅读排版</button>
+      <button type="button" onClick={() => onDrawer('vocab')}>本书生词</button>
+    </div>
+  )
+}
+
 function wordAtPoint(x, y) {
   let range = null
   if (document.caretRangeFromPoint) range = document.caretRangeFromPoint(x, y)
@@ -369,6 +412,8 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
   const [drawer, setDrawer] = useState(null)
   const [savingSelection, setSavingSelection] = useState(false)
   const [bookVocab, setBookVocab] = useState([])
+  const [stealth, setStealth] = useState(false)
+  const [stealthMenu, setStealthMenu] = useState(false)
   const [fontSize, setFontSize] = useState(18)
   const [lineHeight, setLineHeight] = useState(1.9)
   const [readingWidth, setReadingWidth] = useState(720)
@@ -409,6 +454,7 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
       setLineHeight(Number(data.lineHeight) || 1.9)
       setReadingWidth(Number(data.maxWidth) || 720)
       setTheme(data.theme || 'paper')
+      setStealth(Boolean(data.slackingMode))
     }).catch(() => {})
   }, [])
 
@@ -642,6 +688,18 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
 
   const title = detail?.book?.title ?? ''
   const chapters = detail?.chapters ?? []
+  const chapterBlocks = useMemo(() => splitChapterBlocks(chapter?.html ?? ''), [chapter])
+  const changeStealth = async (next) => {
+    setStealth(next)
+    setStealthMenu(false)
+    setDrawer(null)
+    setMenu(null)
+    try {
+      await api('/settings', { method: 'PATCH', body: { slackingMode: next } })
+    } catch {
+      // The current page keeps the chosen mode even if persistence fails.
+    }
+  }
   const readingStyle = useMemo(() => ({
     '--nr-reading-size': `${fontSize}px`,
     '--nr-reading-leading': lineHeight,
@@ -650,43 +708,88 @@ export default function ReaderView({ bookId, initialChapter, onBack, onRefresh, 
   }), [fontSize, lineHeight, readingWidth])
 
   return (
-    <div className={`nr-reader nr-theme-${theme}`}>
-      <div className="nr-reader-top">
-        <Button variant="ghost" size="small" onClick={onBack} title="返回书架"><Icon name="arrowLeft" size={15} /> 书架</Button>
-        <div className="nr-reader-title">
-          <div className="nr-reader-book">{title}</div>
-          <div className="nr-reader-chapter">{chapter?.title ?? '加载中…'}</div>
+    <div className={`nr-reader nr-theme-${theme} ${stealth ? 'is-stealth' : ''}`}>
+      {stealth ? (
+        <>
+          <div className="nr-stealth-top">
+            <button type="button" className="nr-stealth-back" onClick={onBack} aria-label="返回书架"><Icon name="arrowLeft" size={16} /></button>
+            <div className="nr-stealth-avatar">D</div>
+            <div className="nr-stealth-who">
+              <div className="nr-stealth-name">DeepSeek</div>
+              <div className="nr-stealth-status">在线</div>
+            </div>
+            <button type="button" className="nr-stealth-menu-btn" onClick={() => setStealthMenu((value) => !value)} aria-label="摸鱼菜单">
+              <Icon name="more" size={18} />
+            </button>
+          </div>
+          {stealthMenu ? (
+            <StealthMenu
+              onClose={() => setStealthMenu(false)}
+              onExit={() => changeStealth(false)}
+              onDrawer={(name) => { setDrawer(name); setStealthMenu(false) }}
+            />
+          ) : null}
+        </>
+      ) : (
+        <div className="nr-reader-top">
+          <Button variant="ghost" size="small" onClick={onBack} title="返回书架"><Icon name="arrowLeft" size={15} /> 书架</Button>
+          <div className="nr-reader-title">
+            <div className="nr-reader-book">{title}</div>
+            <div className="nr-reader-chapter">{chapter?.title ?? '加载中…'}</div>
+          </div>
+          <Button variant="ghost" size="small" onClick={() => openDrawer('toc')}>目录</Button>
+          <Button variant="ghost" size="small" onClick={() => openDrawer('type')}>Aa</Button>
+          <Button variant="ghost" size="small" onClick={() => openDrawer('vocab')}>生词 {bookVocab.length ? `(${bookVocab.length})` : ''}</Button>
+          <Button variant="ghost" size="small" onClick={() => loadChapter(chapterIndex + 1)} disabled={chapterIndex + 1 >= (detail?.book?.chapterCount ?? 0)}>下一章</Button>
+          <Button variant="ghost" size="small" onClick={() => changeStealth(true)}>摸鱼</Button>
         </div>
-        <Button variant="ghost" size="small" onClick={() => openDrawer('toc')}>目录</Button>
-        <Button variant="ghost" size="small" onClick={() => openDrawer('type')}>Aa</Button>
-        <Button variant="ghost" size="small" onClick={() => openDrawer('vocab')}>生词 {bookVocab.length ? `(${bookVocab.length})` : ''}</Button>
-        <Button variant="ghost" size="small" onClick={() => loadChapter(chapterIndex + 1)} disabled={chapterIndex + 1 >= (detail?.book?.chapterCount ?? 0)}>下一章</Button>
-      </div>
+      )}
 
-      <div className="nr-reader-main">
+      <div className={`nr-reader-main ${stealth ? 'is-stealth' : ''}`}>
         <div className="nr-reader-scroll" ref={scrollRef} onScroll={scheduleSave}>
-          <div className="nr-reader-tip">单词：选中后右键查词典 · 句子：拖选后右键翻译整句</div>
+          {!stealth ? <div className="nr-reader-tip">单词：选中后右键查词典 · 句子：拖选后右键翻译整句</div> : null}
           {error ? <div className="nr-empty" style={{ maxWidth: 620, margin: '40px auto' }}><h3>这一章打不开</h3><p>{error}</p><Button onClick={() => loadChapter(chapterIndex)}>重试</Button></div> : null}
           {loading && !chapter ? <div className="nr-loading">正在打开这一章…</div> : null}
           {chapter ? (
-            <div
-              className="nr-reading"
-              ref={contentRef}
-              style={readingStyle}
-              onContextMenu={handleContextMenu}
-              dangerouslySetInnerHTML={{ __html: chapter.html }}
-            />
+            stealth ? (
+              <div className="nr-reading nr-chat-reading" ref={contentRef} style={readingStyle} onContextMenu={handleContextMenu}>
+                {chapterBlocks.map((block, index) => block.kind === 'heading' ? (
+                  <div key={index} className="nr-chat-divider" dangerouslySetInnerHTML={{ __html: block.html }} />
+                ) : (
+                  <div key={index} className={`nr-chat-row ${index % 2 === 0 ? 'is-left' : 'is-right'}`}>
+                    {index % 2 === 0 ? <div className="nr-chat-avatar">D</div> : null}
+                    <div className="nr-chat-bubble" dangerouslySetInnerHTML={{ __html: block.html }} />
+                    {index % 2 === 1 ? <div className="nr-chat-avatar is-me">我</div> : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div
+                className="nr-reading"
+                ref={contentRef}
+                style={readingStyle}
+                onContextMenu={handleContextMenu}
+                dangerouslySetInnerHTML={{ __html: chapter.html }}
+              />
+            )
           ) : null}
         </div>
       </div>
 
-      <div className="nr-reader-foot">
-        <Button variant="ghost" size="small" onClick={() => loadChapter(chapterIndex - 1)} disabled={chapterIndex <= 0}>上一章</Button>
-        <span>第 {chapterIndex + 1} / {detail?.book?.chapterCount ?? '?'} 章</span>
-        <div className="nr-progress"><i style={{ width: `${chapterPercent}%` }} /></div>
-        <span>本章 {chapterPercent}%</span>
-        <Button variant="ghost" size="small" onClick={() => loadChapter(chapterIndex + 1)} disabled={chapterIndex + 1 >= (detail?.book?.chapterCount ?? 0)}>下一章</Button>
-      </div>
+      {stealth ? (
+        <div className="nr-stealth-composer">
+          <div className="nr-stealth-input">给 DeepSeek 发送消息…</div>
+          <button type="button" className="nr-stealth-send" aria-label="发送" tabIndex={-1}>↑</button>
+        </div>
+      ) : (
+        <div className="nr-reader-foot">
+          <Button variant="ghost" size="small" onClick={() => loadChapter(chapterIndex - 1)} disabled={chapterIndex <= 0}>上一章</Button>
+          <span>第 {chapterIndex + 1} / {detail?.book?.chapterCount ?? '?'} 章</span>
+          <div className="nr-progress"><i style={{ width: `${chapterPercent}%` }} /></div>
+          <span>本章 {chapterPercent}%</span>
+          <Button variant="ghost" size="small" onClick={() => loadChapter(chapterIndex + 1)} disabled={chapterIndex + 1 >= (detail?.book?.chapterCount ?? 0)}>下一章</Button>
+        </div>
+      )}
 
       {drawer === 'toc' ? (
         <Drawer title="目录" onClose={() => setDrawer(null)}>

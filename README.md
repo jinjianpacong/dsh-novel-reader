@@ -10,6 +10,7 @@ Open the **Reading** entry in the left sidebar. The plugin opens a full-page lib
 
 - Import DRM-free **EPUB**, **TXT** and **Markdown** novels. Titles, authors, covers and chapter lists are extracted automatically. Markdown emphasis, block quotes, lists, links, code and horizontal rules are rendered in the reader.
 - Read chapter by chapter with adjustable type size, line height, width and reading theme. Reading position is restored per book.
+- **Slacking mode**: turn the reader into an agent-chat layout where novel paragraphs appear as alternating left/right message bubbles; exit from the three-dot menu.
 - Select a word, right-click and choose **Look up** to query the UAPI English dictionary (phonetics, Chinese and English definitions, examples). Select a sentence, right-click and choose **Translate sentence** to translate it; a single word can also be translated from its menu.
 - Save words or phrases to the vocabulary notebook together with the exact sentence, book and chapter where they appeared.
 - Review vocabulary with a simplified SM-2 schedule and generate quizzes from a chosen scope: English→Chinese, Chinese→English, cloze, spelling and context questions. Quizzes use the current model when available and fall back to a local generator.

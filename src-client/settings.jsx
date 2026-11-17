@@ -36,6 +36,7 @@ export default function SettingsView({ state, notify, onRefresh }) {
           translationEngine: form.translationEngine,
           showEnglishDefinition: Boolean(form.showEnglishDefinition),
           autoSaveLookups: Boolean(form.autoSaveLookups),
+          slackingMode: Boolean(form.slackingMode),
         },
       })
       notify('设置已保存')
@@ -203,6 +204,9 @@ export default function SettingsView({ state, notify, onRefresh }) {
             <Field label="行高"><input className="nr-input" type="number" min="1.4" max="2.4" step="0.1" value={form.lineHeight} onChange={(event) => update('lineHeight', event.target.value)} /></Field>
             <Field label="每日新词目标"><input className="nr-input" type="number" min="0" max="100" value={form.dailyNewWords} onChange={(event) => update('dailyNewWords', event.target.value)} /></Field>
             <Field label="每日复习上限"><input className="nr-input" type="number" min="0" max="500" value={form.dailyReviewLimit} onChange={(event) => update('dailyReviewLimit', event.target.value)} /></Field>
+          </div>
+          <div className="nr-row" style={{ marginTop: 14 }}>
+            <Toggle checked={Boolean(form.slackingMode)} onChange={(value) => update('slackingMode', value)} label="摸鱼模式（阅读界面伪装成对话）" />
           </div>
         </div>
 
